@@ -7,6 +7,8 @@
   "PF1MK.Settings.GMButton.Hint": "Adds a GM-only token control button. It uses controlled tokens.",
   "PF1MK.Settings.InfoSelection.Name": "Information selection interface",
   "PF1MK.Settings.InfoSelection.Hint": "If enabled, players can spend questions on information categories. If disabled, the module only posts the question count.",
+  "PF1MK.Settings.SimplifiedQuestions.Name": "Simplified questions",
+  "PF1MK.Settings.SimplifiedQuestions.Hint": "Combines some questions: AC includes normal, touch, and flat-footed AC; energy resistance includes damage immunities and numbered energy resistance; saves include all saving throws; movement speed includes the main speeds.",
   "PF1MK.Settings.FeatureMode.Name": "Special features mode",
   "PF1MK.Settings.FeatureMode.Hint": "How the GM fills monster special feature answers.",
   "PF1MK.FeatureMode.ActorNames": "Pick from actor item names",

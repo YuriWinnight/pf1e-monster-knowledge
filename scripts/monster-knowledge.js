@@ -48,6 +48,27 @@ const BASE_INFO_OPTIONS = [
   { key: "other", label: "Другое", cost: 1 }
 ];
 
+const SIMPLIFIED_INFO_OPTIONS = [
+  { key: "hp", label: "ПЗ", cost: 1 },
+  { key: "acAll", label: "КБ", cost: 1 },
+  { key: "dr", label: "Снижение урона", cost: 1 },
+  { key: "damageVulnerability", label: "Уязвимость к урону", cost: 1 },
+  { key: "energyResistance", label: "Устойчивость к энергии", cost: 1 },
+  { key: "sr", label: "Устойчивость к магии", cost: 1 },
+  { key: "conditionImmunity", label: "Невосприимчивость к состояниям", cost: 1 },
+  { key: "senses", label: "Чувства", cost: 1 },
+  { key: "languages", label: "Языки", cost: 1 },
+  { key: "savesAll", label: "Испытания", cost: 1 },
+  { key: "cmb", label: "ЗБМ", cost: 1 },
+  { key: "cmd", label: "МБМ", cost: 1 },
+  { key: "feature", label: "Особенности", cost: 1 },
+  { key: "other", label: "Другое", cost: 1 }
+];
+
+const INFO_OPTION_BY_KEY = new Map(
+  [...BASE_INFO_OPTIONS, ...SIMPLIFIED_INFO_OPTIONS].map((option) => [option.key, option])
+);
+
 const SKILL_FALLBACK_LABELS = {
   art: "Артистизм", lor: "Предания",
   acr: "Акробатика", apr: "Оценка", blf: "Блеф", clm: "Лазание", crf: "Ремесло", dev: "Вывод устройств",
@@ -307,6 +328,15 @@ function registerSettings() {
     default: true
   });
 
+  game.settings.register(MODULE_ID, "simplifiedQuestions", {
+    name: game.i18n.localize("PF1MK.Settings.SimplifiedQuestions.Name"),
+    hint: game.i18n.localize("PF1MK.Settings.SimplifiedQuestions.Hint"),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
   game.settings.register(MODULE_ID, "featureMode", {
     name: game.i18n.localize("PF1MK.Settings.FeatureMode.Name"),
     hint: game.i18n.localize("PF1MK.Settings.FeatureMode.Hint"),
@@ -356,6 +386,10 @@ function registerSettings() {
       step: 0.05
     }
   });
+}
+
+function isSimplifiedQuestionsEnabled() {
+  return Boolean(game.settings.get(MODULE_ID, "simplifiedQuestions"));
 }
 
 function attachKnowledgeRollButton(message, html) {
@@ -809,18 +843,28 @@ function openGMCalculatorDialog() {
 
 
 function buildGroupedInfoOptionsHTML() {
-  const byKey = new Map(BASE_INFO_OPTIONS.filter((option) => !["other", "feature"].includes(option.key)).map((option) => [option.key, option]));
-  const groups = [
-    ["hp"],
-    ["ac", "touch", "flatFooted"],
-    ["dr", "damageVulnerability", "damageImmunity", "energyImmunity", "sr", "conditionImmunity"],
-    ["senses", "languages"],
-    ["fort", "ref", "will"],
-    ["cmb", "cmd"]
-  ];
+  const simplified = isSimplifiedQuestionsEnabled();
+  const optionSource = simplified ? SIMPLIFIED_INFO_OPTIONS : BASE_INFO_OPTIONS;
+  const byKey = new Map(optionSource.filter((option) => !["other", "feature"].includes(option.key)).map((option) => [option.key, option]));
+  const groups = simplified
+    ? [
+      ["hp", "acAll"],
+      ["dr", "damageVulnerability", "energyResistance", "sr", "conditionImmunity"],
+      ["senses", "languages"],
+      ["savesAll"],
+      ["cmb", "cmd"]
+    ]
+    : [
+      ["hp"],
+      ["ac", "touch", "flatFooted"],
+      ["dr", "damageVulnerability", "damageImmunity", "energyImmunity", "sr", "conditionImmunity"],
+      ["senses", "languages"],
+      ["fort", "ref", "will"],
+      ["cmb", "cmd"]
+    ];
   return groups.map((keys) => {
     const options = keys.map((key) => byKey.get(key)).filter(Boolean)
-      .map((option) => `<label><input type="checkbox" name="info" value="${option.key}" data-cost="${option.cost}"> ${escapeHtml(option.label)}</label>`)
+      .map((option) => `<label><input type="checkbox" name="info" value="${option.key}" data-label="${escapeAttr(option.label)}" data-cost="${option.cost}"> ${escapeHtml(option.label)}</label>`)
       .join("");
     return `<div class="pf1mk-option-group"><div class="pf1mk-checkbox-grid">${options}</div></div>`;
   }).join("");
@@ -833,6 +877,7 @@ function openPlayerQuestionSelectionDialog({ playerId, questionCount, sceneId, t
   }
 
   const actor = getActorFromReference({ sceneId, tokenId, actorId });
+  const simplified = isSimplifiedQuestionsEnabled();
 
   const abilityOptions = Object.entries(ABILITY_LABELS)
     .map(([key, label]) => `<label><input type="checkbox" name="ability" value="${key}" data-cost="1"> ${escapeHtml(label)}</label>`)
@@ -843,6 +888,7 @@ function openPlayerQuestionSelectionDialog({ playerId, questionCount, sceneId, t
   const speedOptions = getSpeedQuestionChoices(actor)
     .map((option) => `<label><input type="checkbox" name="speed" value="${escapeAttr(option.key)}" data-label="${escapeAttr(option.label)}" data-cost="1"> ${escapeHtml(option.label)}</label>`)
     .join("");
+  const speedNote = simplified ? "Все основные скорости стоят 1 вопрос." : "Каждая отдельная скорость стоит 1 вопрос.";
 
   const skillOptions = getSkillChoicesForDialog(actor)
     .map((entry) => `<label><input type="checkbox" name="skill" value="${escapeAttr(entry.key)}" data-label="${escapeAttr(entry.label)}" data-cost="1"> ${escapeHtml(entry.label)}</label>`)
@@ -863,7 +909,7 @@ function openPlayerQuestionSelectionDialog({ playerId, questionCount, sceneId, t
       <fieldset>
         <legend>Скорость</legend>
         <div class="pf1mk-checkbox-grid">${speedOptions}</div>
-        <p class="notes">Каждая отдельная скорость стоит 1 вопрос.</p>
+        <p class="notes">${escapeHtml(speedNote)}</p>
       </fieldset>
       <fieldset>
         <legend>Особенности</legend>
@@ -998,8 +1044,8 @@ function collectQuestionSelections(form) {
       return;
     }
 
-    const option = BASE_INFO_OPTIONS.find((item) => item.key === input.value);
-    selections.push({ type: "stat", key: input.value, label: option?.label ?? input.value, cost: Number(input.dataset.cost) || 1 });
+    const option = INFO_OPTION_BY_KEY.get(input.value);
+    selections.push({ type: "stat", key: input.value, label: input.dataset.label || option?.label || input.value, cost: Number(input.dataset.cost) || 1 });
   });
 
   const featureInput = form.querySelector("input[name=featureCount]");
@@ -1381,7 +1427,11 @@ function generateAnswers(actor, selections) {
       continue;
     }
     if (selection.type === "speed") {
-      lines.push(`- Скорость: ${getSpecificSpeedAnswer(actor, selection.key)}`);
+      if (selection.key === "movementSpeed") {
+        lines.push(`- ${selection.label || "Скорость перемещения"}: ${formatMovementSpeedSummary(actor)}`);
+      } else {
+        lines.push(`- Скорость: ${getSpecificSpeedAnswer(actor, selection.key)}`);
+      }
       continue;
     }
     if (selection.key === "feature") {
@@ -1406,12 +1456,14 @@ function getStatAnswer(actor, key) {
   const getters = {
     hp: () => formatHP(actor),
     ac: () => valueFromPaths(actor, ["system.attributes.ac.normal.total", "system.attributes.ac.normal.value", "system.attributes.ac.normal", "system.attributes.ac.value", "system.attributes.ac.total"]),
+    acAll: () => formatArmorClassSummary(actor),
     touch: () => valueFromPaths(actor, ["system.attributes.ac.touch.total", "system.attributes.ac.touch.value", "system.attributes.ac.touch"]),
     flatFooted: () => valueFromPaths(actor, ["system.attributes.ac.flatFooted.total", "system.attributes.ac.flatFooted.value", "system.attributes.ac.flatFooted", "system.attributes.ac.flatfooted.total"]),
     dr: () => formatDamageReduction(actor),
     damageVulnerability: () => formatTraitFromPaths(actor, ["system.traits.dv", "system.traits.damageVulnerabilities", "system.traits.vulnerabilities.damage", "system.traits.vulnerabilities"], "damage"),
     damageImmunity: () => formatTraitFromPaths(actor, ["system.traits.di", "system.traits.damageImmunities", "system.traits.damageImmunity", "system.traits.immune.damage", "system.traits.immunities.damage"], "damage"),
     energyImmunity: () => formatEnergyImmunity(actor),
+    energyResistance: () => formatEnergyResistanceSummary(actor),
     sr: () => valueFromPaths(actor, ["system.attributes.sr.total", "system.attributes.sr.value", "system.attributes.sr", "system.traits.sr.total", "system.traits.sr"], "—"),
     conditionImmunity: () => formatTraitFromPaths(actor, ["system.traits.ci", "system.traits.conditionImmunities", "system.traits.conditionImmunity", "system.traits.immunities.condition"], "condition"),
     senses: () => formatSenses(actor),
@@ -1419,11 +1471,34 @@ function getStatAnswer(actor, key) {
     fort: () => getSaveValue(actor, "fort"),
     ref: () => getSaveValue(actor, "ref"),
     will: () => getSaveValue(actor, "will"),
+    savesAll: () => formatSavesSummary(actor),
     cmb: () => valueFromPaths(actor, ["system.attributes.cmb.total", "system.attributes.cmb.value", "system.attributes.cmb"], "—"),
     cmd: () => valueFromPaths(actor, ["system.attributes.cmd.total", "system.attributes.cmd.value", "system.attributes.cmd"], "—")
   };
   const value = getters[key]?.();
   return formatValue(value);
+}
+
+function formatArmorClassSummary(actor) {
+  return [
+    `КБ ${formatValue(valueFromPaths(actor, ["system.attributes.ac.normal.total", "system.attributes.ac.normal.value", "system.attributes.ac.normal", "system.attributes.ac.value", "system.attributes.ac.total"], "—"))}`,
+    `КБ касание ${formatValue(valueFromPaths(actor, ["system.attributes.ac.touch.total", "system.attributes.ac.touch.value", "system.attributes.ac.touch"], "—"))}`,
+    `КБ врасплох ${formatValue(valueFromPaths(actor, ["system.attributes.ac.flatFooted.total", "system.attributes.ac.flatFooted.value", "system.attributes.ac.flatFooted", "system.attributes.ac.flatfooted.total"], "—"))}`
+  ].join("; ");
+}
+
+function formatEnergyResistanceSummary(actor) {
+  const damageImmunity = formatTraitFromPaths(actor, ["system.traits.di", "system.traits.damageImmunities", "system.traits.damageImmunity", "system.traits.immune.damage", "system.traits.immunities.damage"], "damage");
+  const energyResistance = formatEnergyImmunity(actor);
+  return `Невосприимчивость к урону: ${damageImmunity}; Невосприимчивость к энергии: ${energyResistance}`;
+}
+
+function formatSavesSummary(actor) {
+  return [
+    `Стойкость ${getSaveValue(actor, "fort")}`,
+    `Реакция ${getSaveValue(actor, "ref")}`,
+    `Воля ${getSaveValue(actor, "will")}`
+  ].join("; ");
 }
 
 function getAbilityValue(actor, abilityKey) {
@@ -1524,6 +1599,12 @@ function formatSpeed(actor) {
   return entries.length ? entries.map((entry) => `${entry.label} ${formatDistanceValue(entry.value)}`).join("; ") : "—";
 }
 
+function formatMovementSpeedSummary(actor) {
+  return SPEED_QUESTION_OPTIONS
+    .map((option) => getSpecificSpeedAnswer(actor, option.key))
+    .join("; ");
+}
+
 function getSpecificSpeedAnswer(actor, speedKey) {
   const entries = getSpeedEntries(actor, { includeZero: true });
   const aliases = SPEED_ALIASES[speedKey] ?? [speedKey];
@@ -1534,6 +1615,7 @@ function getSpecificSpeedAnswer(actor, speedKey) {
 }
 
 function getSpeedQuestionChoices(actor) {
+  if (isSimplifiedQuestionsEnabled()) return [{ key: "movementSpeed", label: "Скорость перемещения" }];
   const entries = getSpeedEntries(actor, { includeZero: false });
   const hasCustom = entries.some((entry) => entry.key === "custom");
   return hasCustom ? [...SPEED_QUESTION_OPTIONS, { key: "custom", label: "Особая скорость" }] : SPEED_QUESTION_OPTIONS;
@@ -2144,9 +2226,86 @@ function formatTraitFromPaths(actor, paths, dictionary = "damage") {
 }
 
 function formatEnergyImmunity(actor) {
-  const explicit = formatTraitFromPaths(actor, ["system.traits.ei", "system.traits.energyImmunities", "system.traits.energyImmunity", "system.traits.immune.energy", "system.traits.immunities.energy"], "damage");
-  if (explicit !== "—") return explicit;
-  return formatFilteredTraitFromPaths(actor, ["system.traits.di", "system.traits.damageImmunities", "system.traits.damageImmunity"], "damage", ENERGY_DAMAGE_KEYS);
+  return formatEnergyResistance(actor);
+}
+
+function formatEnergyResistance(actor) {
+  const paths = [
+    "system.traits.eres",
+    "system.traits.er",
+    "system.traits.energyResistances",
+    "system.traits.energyResistance",
+    "system.traits.resist.energy",
+    "system.traits.resistances.energy"
+  ];
+
+  for (const path of paths) {
+    const raw = foundry.utils.getProperty(actor, path);
+    const formatted = formatEnergyResistanceValue(raw);
+    if (formatted !== "—") return formatted;
+  }
+
+  return "—";
+}
+
+function formatEnergyResistanceValue(value) {
+  if (value === null || value === undefined || value === "" || value === false) return "—";
+  if (typeof value === "string" || typeof value === "number") {
+    const text = translateCompoundText(value, "damage");
+    return text || "—";
+  }
+  if (value instanceof Set) {
+    const parts = Array.from(value).map((entry) => formatEnergyResistanceValue(entry)).filter((entry) => entry && entry !== "—");
+    return parts.length ? [...new Set(parts)].join("; ") : "—";
+  }
+  if (Array.isArray(value)) {
+    const parts = value.map((entry) => formatEnergyResistanceEntry(entry) || formatEnergyResistanceValue(entry)).filter((entry) => entry && entry !== "—");
+    return parts.length ? [...new Set(parts)].join("; ") : "—";
+  }
+  if (typeof value !== "object") return "—";
+
+  const direct = formatEnergyResistanceEntry(value);
+  if (direct) return direct;
+
+  const parts = [];
+  const add = (text) => {
+    if (text && text !== "—" && !parts.includes(text)) parts.push(text);
+  };
+
+  for (const key of ["custom", "special", "other"]) {
+    if (typeof value[key] === "string" && value[key].trim()) add(translateCompoundText(value[key].trim(), "damage"));
+  }
+  if (value.value !== undefined && value.value !== value) add(formatEnergyResistanceValue(value.value));
+  if (value.selected !== undefined && value.selected !== value) add(formatEnergyResistanceValue(value.selected));
+
+  for (const [key, child] of Object.entries(value)) {
+    if (["custom", "special", "other", "value", "selected", "types", "type", "damageTypes", "against", "formula", "amount", "total", "resistance", "er", "operator"].includes(key)) continue;
+    const normalized = normalizeToken(key);
+    if (ENERGY_DAMAGE_KEYS.has(normalized) && child !== null && child !== undefined && child !== "" && child !== false) {
+      add(`${translateToken(key, "damage")} ${formatValue(child)}`);
+      continue;
+    }
+    if (child && typeof child === "object") add(formatEnergyResistanceValue(child));
+  }
+
+  return parts.length ? parts.join("; ") : "—";
+}
+
+function formatEnergyResistanceEntry(entry) {
+  if (!entry || typeof entry !== "object") return "";
+  const amount = entry.formula ?? entry.amount ?? entry.total ?? entry.valueAmount ?? entry.resistance ?? entry.er;
+  const rawTypes = entry.types ?? entry.type ?? entry.damageTypes ?? entry.against ?? [];
+  const types = collectTraitTokens(rawTypes).tokens
+    .map((token) => String(token).trim())
+    .filter((token) => token && !["—", "-", "none", "nothing", "null", "undefined"].includes(token.toLocaleLowerCase()))
+    .map((token) => translateToken(token, "damage"))
+    .filter(Boolean);
+  const custom = collectTraitTokens(rawTypes).custom
+    .map((token) => translateCompoundText(token, "damage"))
+    .filter(Boolean);
+  const labels = [...new Set([...types, ...custom])];
+  if (!labels.length || amount === undefined || amount === null || amount === "") return "";
+  return labels.map((label) => `${label} ${formatValue(amount)}`).join("; ");
 }
 
 function formatFilteredTraitFromPaths(actor, paths, dictionary, allowedKeys) {
