@@ -42,8 +42,8 @@ const BASE_INFO_OPTIONS = [
   { key: "fort", label: "Стойкость", cost: 1 },
   { key: "ref", label: "Реакция", cost: 1 },
   { key: "will", label: "Воля", cost: 1 },
-  { key: "cmb", label: "ЗБМ", cost: 1 },
-  { key: "cmd", label: "МБМ", cost: 1 },
+  { key: "cmd", label: "ЗБМ", cost: 1 },
+  { key: "cmb", label: "МБМ", cost: 1 },
   { key: "feature", label: "Особенности", cost: 1 },
   { key: "other", label: "Другое", cost: 1 }
 ];
@@ -59,8 +59,8 @@ const SIMPLIFIED_INFO_OPTIONS = [
   { key: "senses", label: "Чувства", cost: 1 },
   { key: "languages", label: "Языки", cost: 1 },
   { key: "savesAll", label: "Испытания", cost: 1 },
-  { key: "cmb", label: "ЗБМ", cost: 1 },
-  { key: "cmd", label: "МБМ", cost: 1 },
+  { key: "cmd", label: "ЗБМ", cost: 1 },
+  { key: "cmb", label: "МБМ", cost: 1 },
   { key: "feature", label: "Особенности", cost: 1 },
   { key: "other", label: "Другое", cost: 1 }
 ];
@@ -259,6 +259,7 @@ const ALLOWED_KNOWLEDGE_RUSSIAN = [
 
 Hooks.once("init", () => {
   registerSettings();
+  registerChatMessageRenderHook();
 });
 
 Hooks.once("ready", () => {
@@ -269,25 +270,57 @@ Hooks.once("ready", () => {
 Hooks.on("getSceneControlButtons", (controls) => {
   if (!game.user?.isGM) return;
   if (!game.settings.get(MODULE_ID, "enableGMButton")) return;
-  const tokenControls = controls.find((c) => c.name === "token");
-  if (!tokenControls) return;
-  tokenControls.tools.push({
+  addGMKnowledgeSceneControl(controls);
+});
+
+function addGMKnowledgeSceneControl(controls) {
+  const onActivate = () => openGMCalculatorDialog();
+  const tool = {
     name: "pf1mk-gm-knowledge",
     title: game.i18n.localize("PF1MK.Button.GM"),
     icon: "fas fa-brain",
     button: true,
     visible: true,
-    onClick: () => openGMCalculatorDialog()
-  });
-});
+    onClick: onActivate,
+    onChange: onActivate
+  };
 
-Hooks.on("renderChatMessage", (message, html) => {
-  attachKnowledgeRollButton(message, html);
-  attachFeatureViewHandlers(message, html);
-  attachSelectionButtonHandlers(message, html);
-  attachGMRarityButtonHandlers(message, html);
-  attachGMAnswerButtonHandlers(message, html);
-});
+  if (Array.isArray(controls)) {
+    const tokenControls = controls.find((control) => control.name === "token");
+    if (tokenControls?.tools && !tokenControls.tools.some?.((existing) => existing.name === tool.name)) tokenControls.tools.push(tool);
+    return;
+  }
+
+  const tokenControls = controls?.tokens ?? controls?.token;
+  if (!tokenControls) return;
+  if (Array.isArray(tokenControls.tools)) {
+    if (!tokenControls.tools.some((existing) => existing.name === tool.name)) tokenControls.tools.push(tool);
+    return;
+  }
+
+  tokenControls.tools ??= {};
+  if (!tokenControls.tools[tool.name]) {
+    tokenControls.tools[tool.name] = {
+      ...tool,
+      order: Object.keys(tokenControls.tools).length
+    };
+  }
+}
+
+function registerChatMessageRenderHook() {
+  const hookName = getFoundryMajorVersion() >= 13 ? "renderChatMessageHTML" : "renderChatMessage";
+  Hooks.on(hookName, (message, html) => handleRenderedChatMessage(message, html));
+}
+
+function handleRenderedChatMessage(message, html) {
+  const wrappedHtml = asJQueryHtml(html);
+  if (!wrappedHtml?.find) return;
+  attachKnowledgeRollButton(message, wrappedHtml);
+  attachFeatureViewHandlers(message, wrappedHtml);
+  attachSelectionButtonHandlers(message, wrappedHtml);
+  attachGMRarityButtonHandlers(message, wrappedHtml);
+  attachGMAnswerButtonHandlers(message, wrappedHtml);
+}
 
 Hooks.on("createChatMessage", (message) => {
   const type = message?.flags?.[MODULE_ID]?.type;
@@ -403,6 +436,146 @@ function isSimplifiedQuestionsEnabled() {
 
 function shouldHideSharedFeatureHiddenText() {
   return Boolean(game.settings.get(MODULE_ID, "hideSharedFeatureHiddenText"));
+}
+
+function getFoundryMajorVersion() {
+  const version = globalThis.game?.version ?? globalThis.game?.data?.version ?? globalThis.CONFIG?.version ?? "";
+  const match = String(version).match(/^(\d+)/);
+  return match ? Number(match[1]) : 11;
+}
+
+function asJQueryHtml(html) {
+  if (!html) return null;
+  if (html.jquery) return html;
+  const jquery = globalThis.jQuery ?? globalThis.$;
+  return jquery ? jquery(html) : null;
+}
+
+function getDialogClass() {
+  const globalDialog = typeof Dialog === "function" ? Dialog : null;
+  const candidates = [
+    globalDialog,
+    globalThis.Dialog,
+    globalThis.foundry?.applications?.api?.Dialog,
+    globalThis.foundry?.appv1?.api?.Dialog
+  ];
+  return candidates.find((candidate) => typeof candidate === "function") ?? null;
+}
+
+function getDialogV2Class() {
+  const globalDialogV2 = typeof DialogV2 === "function" ? DialogV2 : null;
+  const candidates = [
+    globalDialogV2,
+    globalThis.DialogV2,
+    globalThis.foundry?.applications?.api?.DialogV2
+  ];
+  return candidates.find((candidate) => typeof candidate === "function") ?? null;
+}
+
+function getDialogHtml(dialog, button) {
+  return asJQueryHtml(dialog?.element ?? button?.form?.closest?.(".application") ?? button?.form ?? button?.closest?.(".application"));
+}
+
+function prepareDialogV2Content(content) {
+  if (typeof content !== "string" || !globalThis.document?.createElement) return content ?? "";
+  const wrapper = globalThis.document.createElement("div");
+  wrapper.innerHTML = content;
+  const child = wrapper.firstElementChild;
+  if (wrapper.children.length === 1 && child?.tagName?.toLowerCase() === "form") {
+    const replacement = globalThis.document.createElement("div");
+    Array.from(child.attributes).forEach((attr) => replacement.setAttribute(attr.name, attr.value));
+    replacement.innerHTML = child.innerHTML;
+    wrapper.replaceChildren(replacement);
+  }
+  return wrapper;
+}
+
+function dialogV2IconClass(icon) {
+  if (!icon) return undefined;
+  const match = String(icon).match(/class=["']([^"']+)["']/i);
+  return match ? match[1] : String(icon);
+}
+
+function runDialogRenderCallbackOnce(dialog, data, button = null) {
+  if (typeof data.render !== "function" || dialog._pf1mkRenderCallbackDone) return;
+  const html = getDialogHtml(dialog, button);
+  if (!html) return;
+  dialog._pf1mkRenderCallbackDone = true;
+  data.render(html);
+}
+
+function renderDialogV2Compat(data, options = {}) {
+  const DialogV2Class = getDialogV2Class();
+  if (!DialogV2Class) throw new Error(`${MODULE_ID} | No compatible Dialog implementation found.`);
+
+  let dialog = null;
+  const buttons = Object.entries(data.buttons ?? {}).map(([action, button]) => ({
+    action,
+    label: button.label ?? action,
+    icon: dialogV2IconClass(button.icon),
+    default: data.default === action,
+    callback: async (event, buttonElement, dialogInstance) => {
+      const activeDialog = dialogInstance ?? dialog;
+      runDialogRenderCallbackOnce(activeDialog, data, buttonElement);
+      const html = getDialogHtml(activeDialog, buttonElement);
+      const result = typeof button.callback === "function"
+        ? await button.callback(html)
+        : undefined;
+      if (result !== false) await activeDialog?.close?.();
+      return result ?? action;
+    }
+  }));
+
+  const dialogOptions = {
+    window: { title: data.title ?? "" },
+    content: prepareDialogV2Content(data.content),
+    buttons,
+    form: { closeOnSubmit: false },
+    submit: () => undefined
+  };
+  if (options.width) dialogOptions.position = { width: options.width };
+  if (options.resizable !== undefined) dialogOptions.window.resizable = Boolean(options.resizable);
+
+  dialog = new DialogV2Class(dialogOptions);
+  if (typeof data.close === "function") {
+    dialog.addEventListener?.("close", () => data.close(getDialogHtml(dialog)));
+  }
+  dialog.addEventListener?.("render", () => runDialogRenderCallbackOnce(dialog, data));
+  Promise.resolve(dialog.render({ force: true }))
+    .then(() => runDialogRenderCallbackOnce(dialog, data))
+    .catch((err) => console.error(`${MODULE_ID} | Dialog render failed`, err));
+  return dialog;
+}
+
+function renderDialog(data, options = {}) {
+  if (getFoundryMajorVersion() >= 13 && getDialogV2Class()) return renderDialogV2Compat(data, options);
+  const DialogClass = getDialogClass();
+  if (DialogClass) return new DialogClass(data, options).render(true);
+  return renderDialogV2Compat(data, options);
+}
+
+function getChatMessageClass() {
+  return globalThis.foundry?.documents?.ChatMessage ?? globalThis.ChatMessage;
+}
+
+function createChatMessage(data) {
+  return getChatMessageClass().create(data);
+}
+
+function applyChatRollMode(chatData, rollMode) {
+  return getChatMessageClass().applyRollMode(chatData, rollMode);
+}
+
+function getWhisperRecipientIds(name) {
+  return getChatMessageClass().getWhisperRecipients(name).map((user) => user.id);
+}
+
+function getTextEditorClass() {
+  return globalThis.foundry?.applications?.ux?.TextEditor ?? globalThis.TextEditor;
+}
+
+function getItemClass() {
+  return globalThis.foundry?.documents?.Item ?? globalThis.Item;
 }
 
 function attachKnowledgeRollButton(message, html) {
@@ -567,7 +740,7 @@ function openCalculationOptionsDialog(payload) {
       <p class="notes">Распространённый монстр легче для опознания; обычный использует СЛ 10 + КО; редкий повышает СЛ.</p>
     </form>`;
 
-  new Dialog({
+  renderDialog({
     title: "Параметры расчёта вопросов",
     content,
     buttons: {
@@ -605,7 +778,7 @@ function openCalculationOptionsDialog(payload) {
       cancel: { label: "Отмена" }
     },
     default: "calculate"
-  }, { width: 470, resizable: true }).render(true);
+  }, { width: 470, resizable: true });
 }
 
 async function handleSocketMessage(payload) {
@@ -668,7 +841,7 @@ async function createGMRarityRequestMessage(payload) {
       </button>
     </div>`;
 
-  await ChatMessage.create(ChatMessage.applyRollMode({
+  await createChatMessage(applyChatRollMode({
     user: game.user.id,
     speaker: getSpeakerFor(token),
     content,
@@ -682,7 +855,7 @@ async function finalizePlayerCalculation(payload, rarity, bonusQuestions = 0) {
   const cr = getActorCR(actor);
   if (!Number.isFinite(cr)) {
     ui.notifications.warn(game.i18n.localize("PF1MK.Warn.NoCR"));
-    await ChatMessage.create({
+    await createChatMessage({
       user: game.user.id,
       speaker: getSpeakerFor(token),
       content: `<div class="pf1mk-card"><h3>${escapeHtml(game.i18n.localize("PF1MK.Chat.ResultTitle"))}</h3><p>Не удалось найти КО цели для расчёта.</p></div>`,
@@ -754,14 +927,15 @@ async function createQuestionCountMessage({ requesterId, requesterName, askerAct
     chatData.whisper = getRequesterAndGMRecipientIds(requesterId);
     chatData.blind = false;
   } else if (rollMode === "player") {
-    const recipients = [...new Set([...getActorOwnerIds(actor), ...ChatMessage.getWhisperRecipients("GM").map((user) => user.id)])];
-    chatData.whisper = recipients.length ? recipients : ChatMessage.getWhisperRecipients("GM").map((user) => user.id);
+    const gmRecipients = getWhisperRecipientIds("GM");
+    const recipients = [...new Set([...getActorOwnerIds(actor), ...gmRecipients])];
+    chatData.whisper = recipients.length ? recipients : gmRecipients;
     chatData.blind = false;
   } else {
-    chatData = ChatMessage.applyRollMode(chatData, rollMode);
+    chatData = applyChatRollMode(chatData, rollMode);
   }
 
-  await ChatMessage.create(chatData);
+  await createChatMessage(chatData);
 }
 
 function openGMCalculatorDialog() {
@@ -811,7 +985,7 @@ function openGMCalculatorDialog() {
       </div>
     </form>`;
 
-  new Dialog({
+  renderDialog({
     title: "Знание о монстре: расчёт вопросов",
     content,
     buttons: {
@@ -851,7 +1025,7 @@ function openGMCalculatorDialog() {
       cancel: { label: "Отмена" }
     },
     default: "calculate"
-  }, { width: 460, resizable: true }).render(true);
+  }, { width: 460, resizable: true });
 }
 
 
@@ -865,7 +1039,7 @@ function buildGroupedInfoOptionsHTML() {
       ["dr", "damageVulnerability", "energyResistance", "sr", "conditionImmunity"],
       ["senses", "languages"],
       ["savesAll"],
-      ["cmb", "cmd"]
+      ["cmd", "cmb"]
     ]
     : [
       ["hp"],
@@ -873,7 +1047,7 @@ function buildGroupedInfoOptionsHTML() {
       ["dr", "damageVulnerability", "damageImmunity", "energyImmunity", "sr", "conditionImmunity"],
       ["senses", "languages"],
       ["fort", "ref", "will"],
-      ["cmb", "cmd"]
+      ["cmd", "cmb"]
     ];
   return groups.map((keys) => {
     const options = keys.map((key) => byKey.get(key)).filter(Boolean)
@@ -944,7 +1118,7 @@ function openPlayerQuestionSelectionDialog({ playerId, questionCount, sceneId, t
       </fieldset>
     </form>`;
 
-  const dialog = new Dialog({
+  const dialog = renderDialog({
     title: "Выбор вопросов о монстре",
     content,
     buttons: {
@@ -1025,8 +1199,6 @@ function openPlayerQuestionSelectionDialog({ playerId, questionCount, sceneId, t
       updateRemaining();
     }
   }, { width: 500, resizable: true });
-
-  dialog.render(true);
 }
 
 function collectQuestionSelections(form) {
@@ -1087,7 +1259,7 @@ async function createGMInfoRequestMessage(payload) {
       </button>
     </div>`;
 
-  await ChatMessage.create({
+  await createChatMessage({
     user: game.user.id,
     speaker: getSpeakerFor(null),
     content,
@@ -1135,7 +1307,7 @@ function openGMAnswerDialog(payload) {
       <p class="notes">Текст можно отредактировать перед отправкой. Для «Другое» модуль оставляет место под ручной ответ.</p>
     </form>`;
 
-  new Dialog({
+  renderDialog({
     title: "Ответить на вопросы о монстре",
     content,
     buttons: {
@@ -1201,8 +1373,8 @@ function openGMAnswerDialog(payload) {
         drop.addEventListener("drop", async (event) => {
           event.preventDefault();
           try {
-            const data = TextEditor.getDragEventData(event);
-            const item = await Item.implementation.fromDropData(data);
+            const data = getTextEditorClass()?.getDragEventData(event);
+            const item = await getItemClass()?.implementation?.fromDropData(data);
             if (!item) return;
             if (isInventoryItem(item) || isExcludedFeatureItem(item)) {
               ui.notifications.warn("Можно вкладывать только предметы-особенности, не предметы инвентаря.");
@@ -1220,7 +1392,7 @@ function openGMAnswerDialog(payload) {
             writeDroppedFeatureEntries(form, entries);
             renderDroppedFeatureList(form);
           } catch (err) {
-            console.warn(`${MODULE_ID} | Drop failed`, err);
+            console.debug(`${MODULE_ID} | Drop failed`, err);
           }
         });
         form.addEventListener("click", (event) => {
@@ -1236,7 +1408,7 @@ function openGMAnswerDialog(payload) {
         });
       }
     }
-  }, { width: 560, resizable: true }).render(true);
+  }, { width: 560, resizable: true });
 }
 
 function buildFeatureControlHTML(features, featureMode, featureLimit = 1) {
@@ -1297,11 +1469,12 @@ async function getItemFromFeatureLink(link, actor = null) {
 async function resolveDocumentUuid(uuid) {
   if (!uuid) return null;
   try {
-    if (typeof fromUuid === "function") return await fromUuid(uuid);
-    if (typeof fromUUID === "function") return await fromUUID(uuid);
-    if (foundry?.utils?.fromUuid) return await foundry.utils.fromUuid(uuid);
+    if (globalThis.foundry?.utils?.fromUuid) return await globalThis.foundry.utils.fromUuid(uuid);
+    if (globalThis.foundry?.utils?.fromUUID) return await globalThis.foundry.utils.fromUUID(uuid);
+    if (typeof globalThis.fromUuid === "function") return await globalThis.fromUuid(uuid);
+    if (typeof globalThis.fromUUID === "function") return await globalThis.fromUUID(uuid);
   } catch (err) {
-    console.warn(`${MODULE_ID} | Could not resolve UUID`, uuid, err);
+    console.debug(`${MODULE_ID} | Could not resolve UUID`, uuid, err);
   }
   return null;
 }
@@ -1325,8 +1498,9 @@ async function openSharedFeatureDialog(entry) {
   const hideHiddenText = shouldHideSharedFeatureHiddenText();
   const rawDescription = String(entry?.description || "");
   const sourceDescription = hideHiddenText ? rawDescription : exposeHiddenFeatureHtml(rawDescription);
-  const enriched = sourceDescription && globalThis.TextEditor?.enrichHTML
-    ? await globalThis.TextEditor.enrichHTML(sourceDescription, { async: true, secrets: !hideHiddenText })
+  const TextEditorClass = getTextEditorClass();
+  const enriched = sourceDescription && TextEditorClass?.enrichHTML
+    ? await TextEditorClass.enrichHTML(sourceDescription, { async: true, secrets: !hideHiddenText })
     : sourceDescription;
   const visibleDescription = hideHiddenText
     ? hideHiddenFeatureHtml(enriched || sourceDescription)
@@ -1340,12 +1514,12 @@ async function openSharedFeatureDialog(entry) {
       </div>
       <div class="pf1mk-feature-viewer-body">${visibleDescription || "<p>Описание особенности отсутствует.</p>"}</div>
     </div>`;
-  new Dialog({
+  renderDialog({
     title: name,
     content,
     buttons: { close: { label: "Закрыть" } },
     default: "close"
-  }, { width: 520, resizable: true }).render(true);
+  }, { width: 520, resizable: true });
 }
 
 function collectFeatureAnswer(form, actor) {
@@ -1428,13 +1602,13 @@ async function postGMAnswer({ payload, token, actor, answerHtml, rollMode }) {
   };
 
   if (rollMode === "player") {
-    chatData.whisper = [payload.requesterId, ...ChatMessage.getWhisperRecipients("GM").map((u) => u.id)];
+    chatData.whisper = [payload.requesterId, ...getWhisperRecipientIds("GM")];
     chatData.blind = false;
   } else {
-    chatData = ChatMessage.applyRollMode(chatData, rollMode);
+    chatData = applyChatRollMode(chatData, rollMode);
   }
 
-  await ChatMessage.create(chatData);
+  await createChatMessage(chatData);
 }
 
 function generateAnswers(actor, selections) {
@@ -1465,7 +1639,11 @@ function generateAnswers(actor, selections) {
       lines.push(`- Другое: ${selection.question ? selection.question + " — " : ""}[впишите ответ ГМ]`);
       continue;
     }
-    lines.push(`- ${selection.label}: ${getStatAnswer(actor, selection.key)}`);
+    // Requests saved before 1.10.15 paired the maneuver labels with swapped keys.
+    let statKey = selection.key;
+    if (statKey === "cmb" && selection.label === "ЗБМ") statKey = "cmd";
+    else if (statKey === "cmd" && selection.label === "МБМ") statKey = "cmb";
+    lines.push(`- ${selection.label}: ${getStatAnswer(actor, statKey)}`);
   }
   return lines.join("\n");
 }
@@ -2651,9 +2829,10 @@ function getAskerActorName(message, targetToken = null) {
 
 function getSpeakerFor(token, actor = null) {
   const tokenDocument = token?.document ?? token ?? null;
-  if (tokenDocument) return ChatMessage.getSpeaker({ token: tokenDocument });
-  if (actor) return ChatMessage.getSpeaker({ actor });
-  return ChatMessage.getSpeaker();
+  const ChatMessageClass = getChatMessageClass();
+  if (tokenDocument) return ChatMessageClass.getSpeaker({ token: tokenDocument });
+  if (actor) return ChatMessageClass.getSpeaker({ actor });
+  return ChatMessageClass.getSpeaker();
 }
 
 function getTokenReference(token, actor = null) {
@@ -2711,7 +2890,7 @@ async function playGMInfoRequestSound() {
       await foundry.audio.AudioHelper.play({ src, volume, loop: false, autoplay: true }, false);
     }
   } catch (err) {
-    console.warn(`${MODULE_ID} | Could not play GM request sound`, err);
+    console.debug(`${MODULE_ID} | Could not play GM request sound`, err);
   }
 }
 
@@ -2805,7 +2984,7 @@ function safeJsonFromBase64(value) {
   try {
     return JSON.parse(decodeURIComponent(escape(atob(value))));
   } catch (err) {
-    console.warn(`${MODULE_ID} | Bad payload`, err);
+    console.debug(`${MODULE_ID} | Bad payload`, err);
     ui.notifications.error("Не удалось прочитать данные запроса.");
     return null;
   }

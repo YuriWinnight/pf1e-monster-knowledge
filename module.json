@@ -1,46 +1,46 @@
 {
-    "id":  "pf1e-monster-knowledge",
-    "title":  "Pathfinder 1e Monster Knowledge",
-    "description":  "Р С™Р Р…Р С•Р С—Р С”Р С‘ Р Т‘Р В»РЎРЏ Pathfinder 1e: РЎР‚Р В°РЎРѓРЎвЂЎРЎвЂРЎвЂљ РЎвЂЎР С‘РЎРѓР В»Р В° Р Р†Р С•Р С—РЎР‚Р С•РЎРѓР С•Р Р† Р С• Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚Р Вµ Р С—Р С• Р С™Р С› Р С‘ Р В±РЎР‚Р С•РЎРѓР С”РЎС“ Р вЂ”Р Р…Р В°Р Р…Р С‘РЎРЏ, Р Р†РЎвЂ№Р В±Р С•РЎР‚ Р С”Р С•Р Р…Р С”РЎР‚Р ВµРЎвЂљР Р…Р С•Р в„– Р С‘Р Р…РЎвЂћР С•РЎР‚Р СР В°РЎвЂ Р С‘Р С‘, Р В·Р В°Р С—РЎР‚Р С•РЎРѓРЎвЂ№ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р С‘ Р С•РЎвЂљР Р†Р ВµРЎвЂљРЎвЂ№ Р вЂњР Сљ.",
-    "authors":  [
-                    {
-                        "name":  "Yuri / ChatGPT"
-                    }
-                ],
-    "version":  "1.10.12",
-    "compatibility":  {
-                          "minimum":  "11",
-                          "verified":  "11",
-                          "maximum":  "11"
-                      },
-    "relationships":  {
-                          "systems":  [
-                                          {
-                                              "id":  "pf1",
-                                              "type":  "system"
-                                          }
-                                      ]
-                      },
-    "esmodules":  [
-                      "scripts/monster-knowledge.js"
-                  ],
-    "styles":  [
-                   "styles/monster-knowledge.css"
-               ],
-    "languages":  [
-                      {
-                          "lang":  "ru",
-                          "name":  "Р В РЎС“РЎРѓРЎРѓР С”Р С‘Р в„–",
-                          "path":  "lang/ru.json"
-                      },
-                      {
-                          "lang":  "en",
-                          "name":  "English",
-                          "path":  "lang/en.json"
-                      }
-                  ],
-    "socket":  true,
-    "url":  "https://github.com/YuriWinnight/pf1e-monster-knowledge",
-    "manifest":  "https://github.com/YuriWinnight/pf1e-monster-knowledge/releases/latest/download/module.json",
-    "download":  "https://github.com/YuriWinnight/pf1e-monster-knowledge/releases/download/v1.10.12/pf1e-monster-knowledge-v1.10.12.zip"
+  "id": "pf1e-monster-knowledge",
+  "title": "Pathfinder 1e Monster Knowledge",
+  "description": "Кнопки для Pathfinder 1e: расчёт числа вопросов о монстре по КО и броску Знания, выбор конкретной информации, запросы игроков и ответы ГМ.",
+  "authors": [
+    {
+      "name": "Yuri / ChatGPT"
+    }
+  ],
+  "version": "1.10.15",
+  "compatibility": {
+    "minimum": "11",
+    "verified": "14",
+    "maximum": "14"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf1",
+        "type": "system"
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/monster-knowledge.js"
+  ],
+  "styles": [
+    "styles/monster-knowledge.css"
+  ],
+  "languages": [
+    {
+      "lang": "ru",
+      "name": "Русский",
+      "path": "lang/ru.json"
+    },
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "socket": true,
+  "url": "https://github.com/YuriWinnight/pf1e-monster-knowledge",
+  "manifest": "https://github.com/YuriWinnight/pf1e-monster-knowledge/releases/latest/download/module.json",
+  "download": "https://github.com/YuriWinnight/pf1e-monster-knowledge/releases/download/v1.10.15/pf1e-monster-knowledge-v1.10.15.zip"
 }
